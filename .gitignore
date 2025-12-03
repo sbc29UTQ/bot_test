@@ -152,6 +152,8 @@ data/*.csv
 data/*.json
 logs/*.log
 *.db
+debug_page.html
+output/*.txt
 
 # Selenium
 geckodriver.log

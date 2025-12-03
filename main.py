@@ -11,7 +11,8 @@ def ejemplo_basico():
     print("EJEMPLO 1: Director de Marketing Digital en Perú")
     print("="*80)
 
-    scraper = LinkedInProfileScraper(headless=False)
+    # Activar debug=True para ver información de depuración
+    scraper = LinkedInProfileScraper(headless=False, debug=True)
 
     keywords = [
         "Director de Marketing Digital",

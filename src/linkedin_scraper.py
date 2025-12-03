@@ -23,14 +23,16 @@ from bs4 import BeautifulSoup
 class LinkedInProfileScraper:
     """Scraper para encontrar perfiles de LinkedIn usando búsquedas en Google"""
 
-    def __init__(self, headless: bool = False):
+    def __init__(self, headless: bool = False, debug: bool = False):
         """
         Inicializa el scraper
 
         Args:
             headless: Si True, ejecuta el navegador en modo headless (sin interfaz gráfica)
+            debug: Si True, muestra información de depuración
         """
         self.headless = headless
+        self.debug = debug
         self.driver = None
         self.profiles_data: List[Dict] = []
         self.profiles_urls: Set[str] = set()
@@ -102,7 +104,11 @@ class LinkedInProfileScraper:
             search_box = self.driver.find_element(By.NAME, "q")
             search_box.send_keys(search_query)
             search_box.send_keys(Keys.RETURN)
-            time.sleep(3)
+
+            # Esperar a que cargue la página de resultados
+            if self.debug:
+                print("[DEBUG] Esperando a que carguen los resultados...")
+            time.sleep(5)  # Aumentar el tiempo de espera
 
             # Procesar múltiples páginas de resultados
             for page in range(num_pages):
@@ -126,15 +132,84 @@ class LinkedInProfileScraper:
             page_source = self.driver.page_source
             soup = BeautifulSoup(page_source, 'html.parser')
 
-            # Encontrar todos los divs de resultados de búsqueda
-            # Google usa la clase 'g' para cada resultado
-            search_results = soup.find_all('div', class_='g')
+            if self.debug:
+                print("\n[DEBUG] Analizando página...")
+                # Guardar HTML para depuración
+                with open('debug_page.html', 'w', encoding='utf-8') as f:
+                    f.write(page_source)
+                print("[DEBUG] HTML guardado en debug_page.html")
 
+            # Estrategia 1: Buscar en divs con diferentes clases que Google usa
+            search_results = []
+
+            # Probar diferentes selectores que Google usa
+            selectors = [
+                ('div', 'g'),           # Selector clásico
+                ('div', 'Gx5Zad'),      # Selector alternativo
+                ('div', 'kvH3mc'),      # Otro selector de Google
+                ('div', 'egMi0'),       # Nuevo selector
+            ]
+
+            for tag, class_name in selectors:
+                results = soup.find_all(tag, class_=class_name)
+                if results:
+                    search_results.extend(results)
+                    if self.debug:
+                        print(f"[DEBUG] Encontrados {len(results)} resultados con selector {tag}.{class_name}")
+
+            # Estrategia 2: Si no encontramos resultados con selectores específicos,
+            # buscar TODOS los enlaces en la página
+            if not search_results:
+                if self.debug:
+                    print("[DEBUG] No se encontraron resultados con selectores específicos")
+                    print("[DEBUG] Buscando todos los enlaces en la página...")
+
+                # Buscar todos los enlaces directamente
+                all_links = soup.find_all('a', href=True)
+
+                profiles_in_page = 0
+                for link in all_links:
+                    href = link.get('href', '')
+
+                    # Filtrar solo enlaces de LinkedIn
+                    if 'linkedin.com/in/' in href:
+                        profile_url = self._clean_linkedin_url(href)
+
+                        if profile_url and profile_url not in self.profiles_urls:
+                            # Intentar obtener el texto del enlace o del elemento padre
+                            title = link.get_text(strip=True)
+
+                            # Si el título está vacío, buscar en el elemento padre
+                            if not title:
+                                parent = link.find_parent()
+                                if parent:
+                                    h3_tag = parent.find('h3')
+                                    title = h3_tag.get_text(strip=True) if h3_tag else "Sin título"
+
+                            # Guardar información del perfil
+                            profile_data = {
+                                'url': profile_url,
+                                'title': title if title else "Sin título",
+                                'snippet': ""
+                            }
+
+                            self.profiles_data.append(profile_data)
+                            self.profiles_urls.add(profile_url)
+                            profiles_in_page += 1
+
+                            print(f"  ✓ Perfil encontrado: {profile_url}")
+                            if title and title != "Sin título":
+                                print(f"    Título: {title}")
+
+                print(f"  Total en esta página: {profiles_in_page}")
+                return
+
+            # Estrategia 3: Procesar los resultados encontrados con selectores específicos
             profiles_in_page = 0
             for result in search_results:
                 try:
                     # Buscar el enlace en el resultado
-                    link_tag = result.find('a')
+                    link_tag = result.find('a', href=True)
                     if not link_tag:
                         continue
 
@@ -150,10 +225,19 @@ class LinkedInProfileScraper:
                             title = title_tag.get_text(strip=True) if title_tag else "Sin título"
 
                             # Intentar extraer el snippet/descripción
-                            snippet_tag = result.find('div', class_='VwiC3b')
-                            if not snippet_tag:
-                                snippet_tag = result.find('span', class_='aCOpRe')
-                            snippet = snippet_tag.get_text(strip=True) if snippet_tag else ""
+                            snippet = ""
+                            snippet_selectors = [
+                                ('div', 'VwiC3b'),
+                                ('span', 'aCOpRe'),
+                                ('div', 'IsZvec'),
+                                ('div', 's3v9rd'),
+                            ]
+
+                            for tag, class_name in snippet_selectors:
+                                snippet_tag = result.find(tag, class_=class_name)
+                                if snippet_tag:
+                                    snippet = snippet_tag.get_text(strip=True)
+                                    break
 
                             # Guardar información del perfil
                             profile_data = {
@@ -171,13 +255,22 @@ class LinkedInProfileScraper:
                                 print(f"    Título: {title}")
 
                 except Exception as e:
-                    # Continuar con el siguiente resultado si hay error
+                    if self.debug:
+                        print(f"[DEBUG] Error procesando resultado: {str(e)}")
                     continue
 
             print(f"  Total en esta página: {profiles_in_page}")
 
+            if profiles_in_page == 0 and self.debug:
+                print("\n[DEBUG] ⚠️ No se encontraron perfiles")
+                print("[DEBUG] Verifica debug_page.html para ver el HTML de la página")
+
         except Exception as e:
             print(f"❌ Error extrayendo perfiles: {str(e)}")
+            if self.debug:
+                import traceback
+                print(f"[DEBUG] Traceback completo:")
+                traceback.print_exc()
 
     def _clean_linkedin_url(self, url: str) -> str:
         """
