@@ -1,6 +1,10 @@
-selenium==4.15.2
-beautifulsoup4==4.12.2
-webdriver-manager==4.0.1
-lxml==4.9.3
-requests==2.31.0
-python-dotenv==1.0.0
+selenium>=4.15.0
+beautifulsoup4>=4.12.0
+webdriver-manager>=4.0.0
+requests>=2.31.0
+python-dotenv>=1.0.0
+
+# Opcional: lxml para parsing más rápido (requiere compiladores de C)
+# Si tienes problemas instalando lxml, puedes omitirlo
+# El scraper usará html.parser que viene incluido con Python
+# lxml>=4.9.0

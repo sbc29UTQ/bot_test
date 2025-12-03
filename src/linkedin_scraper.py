@@ -96,7 +96,7 @@ class LinkedInProfileScraper:
         try:
             # Obtener el HTML de la página
             page_source = self.driver.page_source
-            soup = BeautifulSoup(page_source, 'lxml')
+            soup = BeautifulSoup(page_source, 'html.parser')
 
             # Encontrar todos los enlaces en los resultados de búsqueda
             # Google usa diferentes estructuras, así que probamos varios selectores
